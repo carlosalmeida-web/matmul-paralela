@@ -1,0 +1,15 @@
+# Binários compilados
+sequential/01_matmul
+sequential/01_matmul_profile
+openmp/01_matmul_omp
+mpi/01_matmul_mpi
+*.o
+*.out
+
+# Ambiente Python (scripts de plot, quando existirem)
+__pycache__/
+*.pyc
+.venv/
+
+# Sistema
+.DS_Store
