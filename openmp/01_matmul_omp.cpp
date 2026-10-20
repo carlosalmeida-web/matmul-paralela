@@ -5,7 +5,7 @@
  *
  * Compilar: g++ -O2 -fopenmp -o 01_matmul_omp 01_matmul_omp.cpp
  * Executar: OMP_NUM_THREADS=4 ./01_matmul_omp 512
- *
+ */
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
