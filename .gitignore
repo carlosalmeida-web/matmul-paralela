@@ -2,6 +2,7 @@
 sequential/01_matmul
 sequential/01_matmul_profile
 openmp/01_matmul_omp
+openmp/01_matmul_omp_sched
 mpi/01_matmul_mpi
 *.o
 *.out
