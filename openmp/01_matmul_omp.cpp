@@ -3,8 +3,51 @@
  *
  * Paralelizacao do baseline sequencial (01_matmul.cpp) em memoria compartilhada.
  *
- * Compilar: g++ -O2 -fopenmp -o 01_matmul_omp 01_matmul_omp.cpp
+ * Compilar: make omp     (ou: g++ -O2 -fopenmp -o 01_matmul_omp 01_matmul_omp.cpp)
  * Executar: OMP_NUM_THREADS=4 ./01_matmul_omp 512
+ *
+ * DECISOES DE PROJETO
+ *
+ * 1) Padrao escolhido: laco paralelo (parallel for) no laco externo i.
+ *    Cada iteracao de i calcula UMA linha inteira de C. Linhas diferentes
+ *    sao independentes, entao o trabalho divide-se sem comunicacao.
+ *    Paralelizar o laco externo tambem cria a regiao paralela uma vez so
+ *    (e nao N vezes, como aconteceria num laco interno).
+ *
+ * 2) Condicoes de corrida: NAO existem no laco principal.
+ *    - Cada thread escreve apenas nas linhas C[i][*] que lhe pertencem;
+ *      nenhuma outra thread le ou escreve essas posicoes.
+ *    - A e B sao apenas lidas (leitura concorrente e segura).
+ *    - i e privada por ser a variavel do parallel for; k, j e a sao
+ *      declaradas dentro do laco -> privadas de cada thread.
+ *    Por isso nao ha critical, atomic nem reduction no calculo: qualquer
+ *    um deles so adicionaria sincronizacao desnecessaria.
+ *    Contraexemplo: se paralelizassemos o laco k, varias threads somariam
+ *    no mesmo C[i][j] ao mesmo tempo -> corrida. Seria preciso atomic
+ *    (lentissimo, N^3 operacoes atomicas) ou reduction por elemento.
+ *
+ * 3) Resultado identico ao baseline (bit a bit):
+ *    cada C[i][j] continua acumulando em k = 0, 1, ..., N-1, na mesma
+ *    ordem do sequencial. Mudar QUEM calcula a linha nao muda a ordem
+ *    das somas, logo nao muda o arredondamento.
+ *
+ * 4) Checksum mantido SEQUENCIAL de proposito.
+ *    Um "reduction(+:soma)" mudaria a ordem das somas em ponto flutuante
+ *    (que nao e associativo) e o checksum poderia divergir nas ultimas
+ *    casas. E O(N^2), irrelevante perto do O(N^3) do produto.
+ *
+ * 5) Escalonamento: schedule(static).
+ *    Todas as linhas custam exatamente o mesmo (N*N multiplicacoes; a matriz
+ *    e densa), entao nao ha desbalanceamento: dynamic/guided so somariam
+ *    overhead de distribuicao. O static entrega blocos contiguos de linhas a
+ *    cada thread, o que tambem minimiza false sharing (cada thread escreve
+ *    numa faixa contigua de C; fronteiras so entre blocos).
+ *    Para a comparacao experimental, compilar com -DSCHED_RUNTIME e escolher
+ *    a politica com OMP_SCHEDULE (ver scripts/medir_escalonamento.sh).
+ *
+ * 6) Ponteiros __restrict (ver comentario no codigo): sem eles, com 1 thread
+ *    a versao OpenMP fica mais lenta que o baseline, porque o compilador deixa
+ *    de vetorizar o laco j dentro da regiao paralela.
  */
 #include <cstdio>
 #include <cstdlib>
