@@ -16,7 +16,47 @@
  *   - Checksum sequencial no rank 0, mesma ordem do baseline
  *     => resultado identico bit a bit.
  *
- * Compilar: mpicxx -O2 -o 01_matmul_mpi 01_matmul_mpi.cpp
+ * POR QUE CADA DECISAO
+ *
+ * 1) Decomposicao de DOMINIO por faixas de linhas (1D).
+ *    Cada linha de C depende so da linha correspondente de A e de B inteira,
+ *    entao faixas de linhas sao independentes: nenhum processo precisa
+ *    conversar com outro durante o calculo. E a mesma ideia do OpenMP
+ *    (cada thread pega um bloco de i), so que agora a memoria e separada.
+ *    Divisao: N = base*P + resto; os 'resto' primeiros ranks ganham 1 linha
+ *    a mais -> diferenca maxima de 1 linha entre processos (carga equilibrada).
+ *
+ * 2) Por que Scatterv/Gatherv e nao Scatter/Gather?
+ *    Scatter exige o MESMO tamanho para todos. Com N=1000 e P=3, por exemplo,
+ *    as faixas sao 334, 333 e 333 linhas. O "v" permite tamanhos diferentes
+ *    (vetores de contagens e deslocamentos: cntA e dspA).
+ *
+ * 3) Por que Bcast de B inteira?
+ *    Para calcular C[i][*] o processo precisa de TODAS as colunas de B
+ *    (o laco k percorre B inteira). Custo: cada processo guarda N^2 doubles
+ *    de B, entao a memoria por processo NAO cai pela metade ao dobrar P.
+ *    Alternativa mais escalavel seria decomposicao 2D (algoritmos de Cannon
+ *    ou SUMMA), que troca so blocos de B, mas com codigo bem mais complexo.
+ *
+ * 4) Volume de comunicacao x calculo (explica o overhead).
+ *    Comunicacao ~ N^2 (Scatterv de A) + (P-1)*N^2 (Bcast de B) + N^2
+ *    (Gatherv de C) doubles  -> CRESCE com P.
+ *    Calculo por processo ~ N^3 / P   -> CAI com P.
+ *    Logo, a fracao de tempo gasta em comunicacao aumenta com P, e o speedup
+ *    se afasta do ideal. Com N maior, o calculo (N^3) domina a comunicacao
+ *    (N^2) e a escalabilidade melhora.
+ *
+ * 5) Medicao.
+ *    - MPI_Barrier antes de t0: todos comecam a cronometrar juntos.
+ *    - O tempo INCLUI a comunicacao (Scatterv, Bcast, Gatherv): e o custo
+ *      real de usar MPI; medir so o calculo inflaria o speedup.
+ *    - MPI_Reduce com MPI_MAX: o programa so termina quando o processo mais
+ *      lento termina, entao o tempo que vale e o maximo.
+ *    - A geracao de A e B fica FORA do cronometro, como no baseline.
+ *    - Numa maquina so, o OpenMPI troca mensagens por memoria compartilhada,
+ *      bem mais rapido que rede; entre maquinas o overhead seria maior.
+ *
+ * Compilar: make mpi     (ou: mpicxx -O2 -o 01_matmul_mpi 01_matmul_mpi.cpp)
  * Executar: mpirun -np 4 ./01_matmul_mpi 512
  */
 #include <cstdio>
